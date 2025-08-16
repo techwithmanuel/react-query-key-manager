@@ -1,0 +1,23 @@
+# Source files (only publish compiled dist/)
+src/
+
+# Config files
+tsconfig.json
+tsconfig.*.json
+
+# Ignore git and editor configs
+.gitignore
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vscode/
+.idea/
+
+# Test files
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Misc
+.DS_Store

@@ -1,0 +1,30 @@
+{
+  "name": "react-query-key-manager",
+  "version": "0.0.1",
+  "description": "A lightweight TypeScript library for managing and organizing query keys for React Query projects, enabling consistent, type-safe key usage without extra dependencies.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "react-query",
+    "query keys",
+    "key manager",
+    "cache keys",
+    "react",
+    "typescript",
+    "data-fetching",
+    "state management",
+    "type-safe"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
