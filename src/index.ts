@@ -1,9 +1,11 @@
 export type QueryKeyPart = string | number | boolean | object;
 export type QueryKey = QueryKeyPart[];
-export type QueryKeyBuilder<Args extends any[] = []> = (
+export type QueryKeyBuilder<Args extends unknown[] = unknown[]> = (
   ...args: Args
 ) => QueryKey;
-export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any>>;
+export type StoredQueryKeyBuilder = (...args: unknown[]) => QueryKey;
+export type QueryKeyRegistry = Record<string, StoredQueryKeyBuilder>;
+export type QueryKeyTree = Record<string, unknown>;
 
 export class QueryKeyManager {
   private static registry: QueryKeyRegistry = {};
@@ -22,13 +24,13 @@ export class QueryKeyManager {
    *   settings: (userId: string) => ['user', 'settings', userId]
    * });
    */
-  static create<KeyMap extends Record<string, QueryKeyBuilder>>(
+  static create<KeyMap extends QueryKeyTree>(
     name: string,
     keyMap: KeyMap
   ): KeyMap {
     // Runtime duplicate check
     if (this.keyNames.has(name)) {
-      if (process.env.NODE_ENV !== "production") {
+      if (process.env.NODE_ENV !== 'production') {
         throw new Error(`QueryKeyManager: Key name "${name}" already exists`);
       }
       return keyMap;
@@ -36,11 +38,24 @@ export class QueryKeyManager {
 
     this.keyNames.add(name);
 
-    // Register each key builder
-    for (const [key, builder] of Object.entries(keyMap)) {
-      const fullKey = `${name}.${key}`;
-      this.registry[fullKey] = builder;
-    }
+    // Register each key builder (supports nested maps)
+    const register = (prefix: string, node: QueryKeyTree | StoredQueryKeyBuilder) => {
+      if (typeof node === 'function') {
+        this.registry[prefix] = node as StoredQueryKeyBuilder;
+        return;
+      }
+
+      for (const [key, value] of Object.entries(node as QueryKeyTree)) {
+        const fullKey = `${prefix}.${key}`;
+        if (typeof value === 'function') {
+          this.registry[fullKey] = value as StoredQueryKeyBuilder;
+        } else if (value && typeof value === 'object') {
+          register(fullKey, value as QueryKeyTree);
+        }
+      }
+    };
+
+    register(name, keyMap);
 
     return keyMap;
   }
