@@ -1,6 +1,6 @@
 export type QueryKeyPart = string | number | boolean | object;
 export type QueryKey = QueryKeyPart[];
-export type QueryKeyBuilder<Args extends any[] = []> = (
+export type QueryKeyBuilder<Args extends unknown[] = []> = (
   ...args: Args
 ) => QueryKey;
 export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any>>;
