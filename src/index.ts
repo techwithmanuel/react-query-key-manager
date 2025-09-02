@@ -1,21 +1,33 @@
 export type QueryKeyPart = string | number | boolean | object | undefined;
 export type QueryKey = readonly QueryKeyPart[];
 
-export type QueryKeyBuilder<
-  Args extends unknown[] = [],
-  Return extends QueryKey = QueryKey
-> = (...args: Args) => Return;
-
-export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any, any>>;
-
-export function createQueryKey<T extends readonly QueryKeyPart[]>(
+function createQueryKey<const T extends readonly QueryKeyPart[]>(
   ...parts: T
 ): T {
   return parts;
 }
 
-type ValidFunction<T> = T extends (...args: any[]) => readonly QueryKeyPart[]
-  ? T
+export function defineKey<
+  const Parts extends readonly QueryKeyPart[],
+  Args extends unknown[] = []
+>(fn: (...args: Args) => Parts): (...args: Args) => Parts {
+  return ((...args: Args) => {
+    const parts = fn(...args);
+    return createQueryKey(...parts);
+  }) as any;
+}
+
+export type QueryKeyBuilder<
+  Args extends unknown[] = [],
+  Return extends readonly QueryKeyPart[] = readonly QueryKeyPart[]
+> = (...args: Args) => Return;
+
+export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any, any>>;
+
+type ValidFunction<T> = T extends (...args: infer A) => infer R
+  ? R extends readonly QueryKeyPart[]
+    ? T
+    : never
   : never;
 
 type ValidateKeyMap<T> = {
@@ -62,23 +74,45 @@ export class QueryKeyManager {
     return Object.freeze({ ...this.registry });
   }
 
-  static clearRegistry() {
+  static clearRegistry(): void {
     this.registry = {};
     this.keyNames.clear();
+  }
+
+  static registerLegacy(
+    legacyKey: string,
+    builder: QueryKeyBuilder<any, any>
+  ): void {
+    if (this.registry[legacyKey]) {
+      throw new Error(`Legacy key ${legacyKey} conflicts with existing keys`);
+    }
+    this.registry[legacyKey] = builder;
   }
 
   private constructor() {}
 }
 
-export function migrateLegacyKeys<T extends (...args: any[]) => QueryKey>(
-  legacyKey: string,
+export function migrateLegacyKeys<T extends QueryKeyBuilder<any, any>>(
+  legacyKeyOrKeys: string | string[],
   newBuilder: T
 ): T {
   if (process.env.NODE_ENV !== "production") {
-    console.warn(`Migrating from legacy key: ${legacyKey}`);
+    const list = Array.isArray(legacyKeyOrKeys)
+      ? legacyKeyOrKeys.join(", ")
+      : legacyKeyOrKeys;
+    console.warn(`Migrating legacy key(s): ${list}`);
   }
-  if (QueryKeyManager.getQueryKeys()[legacyKey]) {
-    throw new Error(`Legacy key ${legacyKey} conflicts with new keys`);
+
+  const keys = Array.isArray(legacyKeyOrKeys)
+    ? legacyKeyOrKeys
+    : [legacyKeyOrKeys];
+
+  for (const key of keys) {
+    if (QueryKeyManager.getQueryKeys()[key]) {
+      throw new Error(`Legacy key ${key} conflicts with new keys`);
+    }
+    QueryKeyManager.registerLegacy(key, newBuilder);
   }
+
   return newBuilder;
 }
