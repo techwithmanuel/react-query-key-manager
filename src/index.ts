@@ -1,4 +1,4 @@
-export type QueryKeyPart = string | number | boolean | object;
+export type QueryKeyPart = string | number | boolean | object | undefined;
 export type QueryKey = QueryKeyPart[];
 export type QueryKeyBuilder<Args extends unknown[] = []> = (
   ...args: Args
@@ -13,19 +13,22 @@ export class QueryKeyManager {
    * Creates a new query key with collision protection
    *
    * @param name Unique key identifier (dot notation recommended for namespacing)
-   * @param builder Function that constructs the query key
-   * @returns Type-safe query key builder function
+   * @param keyMap Object containing query key builder functions
+   * @returns Type-safe query key builder functions with proper inference
    *
    * @example
    * const userKeys = QueryKeyManager.create('user', {
-   *   profile: (userId: string) => ['user', 'profile', userId],
-   *   settings: (userId: string) => ['user', 'settings', userId]
-   * });
+   *   profile: (userId: string) => ['user', 'profile', userId] as const,
+   *   settings: (userId: string, section?: string) => ['user', 'settings', userId, section] as const
+   * } as const);
+   *
+   * // Types are properly inferred:
+   * // userKeys.profile: (userId: string) => QueryKey
+   * // userKeys.settings: (userId: string, section?: string) => QueryKey
    */
-  static create<KeyMap extends Record<string, QueryKeyBuilder>>(
-    name: string,
-    keyMap: KeyMap
-  ): KeyMap {
+  static create<
+    const KeyMap extends Record<string, (...args: any[]) => QueryKey>
+  >(name: string, keyMap: KeyMap): KeyMap {
     // Runtime duplicate check
     if (this.keyNames.has(name)) {
       if (process.env.NODE_ENV !== "production") {
@@ -36,10 +39,10 @@ export class QueryKeyManager {
 
     this.keyNames.add(name);
 
-    // Register each key builder
+    // Register each key builder (type-erased for storage)
     for (const [key, builder] of Object.entries(keyMap)) {
       const fullKey = `${name}.${key}`;
-      this.registry[fullKey] = builder;
+      this.registry[fullKey] = builder as QueryKeyBuilder<any>;
     }
 
     return keyMap;
@@ -66,7 +69,7 @@ export class QueryKeyManager {
   private constructor() {}
 }
 
-export function migrateLegacyKeys<T extends QueryKeyBuilder>(
+export function migrateLegacyKeys<T extends (...args: any[]) => QueryKey>(
   legacyKey: string,
   newBuilder: T
 ): T {
