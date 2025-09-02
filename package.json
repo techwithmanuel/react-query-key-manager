@@ -1,6 +1,6 @@
 {
   "name": "react-query-key-manager",
-  "version": "0.0.111",
+  "version": "0.0.112",
   "description": "A lightweight TypeScript library for managing and organizing query keys for React Query projects, enabling consistent, type-safe key usage without extra dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
