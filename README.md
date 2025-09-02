@@ -18,6 +18,32 @@ yarn add react-query-key-manager
 npm install react-query-key-manager
 ```
 
+## 🔑 New `defineKey` Helper (v0.0.113)
+
+A new `defineKey` helper is available to make query key definitions more expressive and type-safe.  
+It’s fully **optional** and works alongside existing patterns — you can adopt it gradually.
+
+### Example
+
+```ts
+import { QueryKeyManager, defineKey } from "react-query-key-manager";
+
+const userKeys = QueryKeyManager.create("user", {
+  profile: defineKey((userId: string) => ["user", "profile", userId]),
+  settings: defineKey((userId: string, section?: string) => [
+    "user",
+    "settings",
+    userId,
+    section,
+  ]),
+  list: defineKey(() => ["user", "list"]),
+});
+
+// ✅ Strongly typed inference:
+const p = userKeys.profile("123");
+// type: readonly ["user", "profile", string]
+```
+
 ## 🎯 Problem Statement
 
 When working on medium-to-large projects with React Query, query keys quickly become a mess:
