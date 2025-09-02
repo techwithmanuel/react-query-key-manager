@@ -1,35 +1,38 @@
 export type QueryKeyPart = string | number | boolean | object | undefined;
-export type QueryKey = QueryKeyPart[];
-export type QueryKeyBuilder<Args extends unknown[] = []> = (
-  ...args: Args
-) => QueryKey;
-export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any>>;
+export type QueryKey = readonly QueryKeyPart[];
+
+export type QueryKeyBuilder<
+  Args extends unknown[] = [],
+  Return extends QueryKey = QueryKey
+> = (...args: Args) => Return;
+
+export type QueryKeyRegistry = Record<string, QueryKeyBuilder<any, any>>;
+
+export function createQueryKey<T extends readonly QueryKeyPart[]>(
+  ...parts: T
+): T {
+  return parts;
+}
+
+type ValidFunction<T> = T extends (...args: any[]) => readonly QueryKeyPart[]
+  ? T
+  : never;
+
+type ValidateKeyMap<T> = {
+  [K in keyof T]: T[K] extends (...args: any[]) => any
+    ? ValidFunction<T[K]>
+    : T[K] extends object
+    ? ValidateKeyMap<T[K]>
+    : never;
+};
 
 export class QueryKeyManager {
   private static registry: QueryKeyRegistry = {};
   private static keyNames: Set<string> = new Set();
 
-  /**
-   * Creates a new query key with collision protection
-   *
-   * @param name Unique key identifier (dot notation recommended for namespacing)
-   * @param keyMap Object containing query key builder functions
-   * @returns Type-safe query key builder functions with proper inference
-   *
-   * @example
-   * const userKeys = QueryKeyManager.create('user', {
-   *   profile: (userId: string) => ['user', 'profile', userId] as const,
-   *   settings: (userId: string, section?: string) => ['user', 'settings', userId, section] as const
-   * } as const);
-   *
-   * // Types are properly inferred:
-   * // userKeys.profile: (userId: string) => QueryKey
-   * // userKeys.settings: (userId: string, section?: string) => QueryKey
-   */
   static create<
-    const KeyMap extends Record<string, (...args: any[]) => QueryKey>
-  >(name: string, keyMap: KeyMap): KeyMap {
-    // Runtime duplicate check
+    const KeyMap extends Record<string, QueryKeyBuilder<any, any> | object>
+  >(name: string, keyMap: KeyMap & ValidateKeyMap<KeyMap>): KeyMap {
     if (this.keyNames.has(name)) {
       if (process.env.NODE_ENV !== "production") {
         throw new Error(`QueryKeyManager: Key name "${name}" already exists`);
@@ -39,33 +42,31 @@ export class QueryKeyManager {
 
     this.keyNames.add(name);
 
-    // Register each key builder (type-erased for storage)
-    for (const [key, builder] of Object.entries(keyMap)) {
-      const fullKey = `${name}.${key}`;
-      this.registry[fullKey] = builder as QueryKeyBuilder<any>;
-    }
+    const register = (prefix: string, node: Record<string, any>) => {
+      for (const [key, value] of Object.entries(node)) {
+        const fullKey = `${prefix}.${key}`;
+        if (typeof value === "function") {
+          this.registry[fullKey] = value as QueryKeyBuilder<any, any>;
+        } else if (value && typeof value === "object") {
+          register(fullKey, value);
+        }
+      }
+    };
+
+    register(name, keyMap);
 
     return keyMap;
   }
 
-  /**
-   * Retrieves all registered query key builders
-   *
-   * @returns Readonly registry object with all query key builders
-   */
   static getQueryKeys(): Readonly<QueryKeyRegistry> {
     return Object.freeze({ ...this.registry });
   }
 
-  /**
-   * Clears all registered keys (primarily for testing)
-   */
   static clearRegistry() {
     this.registry = {};
     this.keyNames.clear();
   }
 
-  // Private constructor to prevent instantiation
   private constructor() {}
 }
 
@@ -76,11 +77,8 @@ export function migrateLegacyKeys<T extends (...args: any[]) => QueryKey>(
   if (process.env.NODE_ENV !== "production") {
     console.warn(`Migrating from legacy key: ${legacyKey}`);
   }
-
-  // Runtime check to prevent duplicate registration
   if (QueryKeyManager.getQueryKeys()[legacyKey]) {
     throw new Error(`Legacy key ${legacyKey} conflicts with new keys`);
   }
-
   return newBuilder;
 }
